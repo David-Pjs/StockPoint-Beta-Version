@@ -1,0 +1,359 @@
+/* index.css — unified theme (keeps dark tabs unchanged in light mode) */
+/* Tailwind base kept (if using Tailwind v4) */
+@import "tailwindcss";
+
+/* =========================
+   THEME TOKENS
+   ========================= */
+/* Dark = default */
+:root {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --panel-2: #0f1722;          /* deeper than panel (inputs/header) — used for dark tab look */
+  --ink: #f0f6fc;
+  --muted: #9ba3b0;
+  --ok: #10b981;
+  --bad: #ef4444;
+  --accent: #059669;
+  --accent-hover: #047857;
+  --line: #1f2937;
+
+  --ghost: #142034;
+  --ghost-hover: #1a2944;
+
+  --header: #0f1722;
+  --control: #0f1722;
+  --control-focus: #0e1526;
+  --chip-bg: #102433;
+  --pos-bg: #0f2a22;
+  --neg-bg: #2a1517;
+
+  /* touch & sizing helpers */
+  --control-h: 48px;
+  --btn-radius: 10px;
+  --card-radius: 14px;
+}
+
+/* Light – OS preference (auto) - overall site appearance switches here */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f9fafb;
+    --panel: #ffffff;
+    --panel-2: #f4f6f8; /* used for input backgrounds in light mode */
+    --ink: #0f172a;
+    --muted: #64748b;
+    --ok: #059669;
+    --bad: #b91c1c;
+    --accent: #047857;
+    --accent-hover: #065f46;
+    --line: #e5e7eb;
+
+    --ghost: #f5f7fb;
+    --ghost-hover: #eef2f8;
+
+    --header: #ffffff;
+    --control: #ffffff;
+    --control-focus: #f9fbfd;
+    --chip-bg: #eef6fb;
+    --pos-bg: #e8f6ee;
+    --neg-bg: #fdecee;
+  }
+}
+
+/* Manual override via data-theme attribute */
+:root[data-theme="dark"] { /* explicit dark — keep defaults */ }
+:root[data-theme="light"] { /* explicit light — mirror prefers-color-scheme */ 
+  --bg: #f9fafb;
+  --panel: #ffffff;
+  --panel-2: #f4f6f8;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --ok: #059669;
+  --bad: #b91c1c;
+  --accent: #047857;
+  --accent-hover: #065f46;
+  --line: #e5e7eb;
+
+  --ghost: #f5f7fb;
+  --ghost-hover: #eef2f8;
+
+  --header: #ffffff;
+  --control: #ffffff;
+  --control-focus: #f9fbfd;
+  --chip-bg: #eef6fb;
+  --pos-bg: #e8f6ee;
+  --neg-bg: #fdecee;
+}
+
+/* =========================
+   TRANSITIONS / BASE
+   ========================= */
+html, body, .card, .control, .select, .textarea, .app-header {
+  transition: background-color .20s ease, color .20s ease, border-color .18s ease, box-shadow .18s ease;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.45;
+  font-size: 16px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* container for centered content */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 18px;
+}
+
+/* =========================
+   HEADER / NAV
+   ========================= */
+.app-header {
+  background: var(--header);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  backdrop-filter: blur(2px);
+}
+
+.brand { font-weight: 700; letter-spacing: .2px; font-size: 1.05rem; color: var(--ink); }
+
+/* nav default */
+.nav { display:flex; gap:.5rem; align-items:center; }
+.nav a { color: var(--muted); padding:.5rem .65rem; border-radius:8px; font-weight:600; text-decoration:none; }
+.nav a:hover { color: var(--ink); background: var(--panel-2); }
+.nav a.active { color: var(--ink); background: var(--panel-2); border:1px solid var(--line); }
+
+/* ======
+   DARK TAB: if you want a tab/button to remain dark even in light mode,
+   add `class="tab-dark"` to it. This preserves the original dark look.
+   ====== */
+/* force-preserve dark-tab visual (explicit colors so light theme doesn't override) */
+.tab-dark {
+  background: #0f1722;       /* original dark tab background */
+  color: #f0f6fc;            /* original light text */
+  border: 1px solid rgba(255,255,255,0.03);
+  padding: .5rem .65rem;
+  border-radius: 8px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+}
+.tab-dark:hover { background: #111827 } /* subtle hover, still dark */
+.tab-dark.active { box-shadow: 0 0 0 3px rgba(5,150,105,0.06) }
+
+/* =========================
+   BUTTONS (touch-friendly)
+   ========================= */
+.btn {
+  display:inline-flex; align-items:center; justify-content:center;
+  min-height: var(--control-h);
+  padding: .6rem 1rem;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-weight: 700;
+}
+.btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+.btn:disabled { opacity:.6; cursor:not-allowed; transform:none; }
+
+/* ghost */
+.btn-ghost {
+  min-height: var(--control-h);
+  padding:.55rem .9rem;
+  background: var(--ghost);
+  color: var(--ink);
+  border:1px solid var(--line);
+  border-radius: 10px;
+  font-weight:700;
+}
+.btn-ghost:hover { background: var(--ghost-hover); }
+
+/* danger */
+.btn-danger {
+  min-height: var(--control-h);
+  background: var(--neg-bg);
+  color: color-mix(in oklab, var(--bad), #fff 20%);
+  border-radius: 10px;
+  border:1px solid color-mix(in oklab, var(--neg-bg), #000 10%);
+}
+.btn-danger:hover { filter: brightness(.98) }
+
+/* small */
+.btn.sm { min-height: 40px; padding: .45rem .7rem; font-size: .95rem }
+
+/* =========================
+   BADGES / AVATAR
+   ========================= */
+.badge {
+  font-size: 11px; line-height: 1;
+  padding: .32rem .55rem; border-radius: 999px;
+  background: var(--chip-bg); border:1px solid var(--line);
+  color: var(--muted); font-weight:700;
+}
+.avatar {
+  width: 32px; height: 32px; border-radius: 999px;
+  display:grid; place-items:center; font-weight:800;
+  color:#0b221a; background: var(--ok);
+}
+
+/* =========================
+   CARD
+   ========================= */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 6px 18px rgba(3,7,18,0.28);
+}
+.card.compact { padding: 10px; border-radius: 10px }
+
+/* =========================
+   FORM CONTROLS
+   ========================= */
+.control, .select, .textarea {
+  width: 100%;
+  min-height: var(--control-h);
+  padding: .72rem .9rem;
+  background: var(--control);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  line-height: 1.25;
+  outline: none;
+}
+.control::placeholder, .textarea::placeholder { color: var(--muted); }
+
+.control:focus, .select:focus, .textarea:focus {
+  border-color: color-mix(in oklab, var(--accent), #000 10%);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent), #fff 75% / 16%);
+  background: var(--control-focus);
+}
+
+/* textarea */
+.textarea { min-height: 96px; resize: vertical; }
+
+/* number: remove spinners */
+input[type="number"].control { -moz-appearance: textfield; }
+input[type="number"].control::-webkit-outer-spin-button,
+input[type="number"].control::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* select caret */
+.select {
+  -webkit-appearance: none; appearance: none;
+  padding-right: 2.25rem;
+  background-image:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 20 20' fill='%23a3b0bf'><path d='M5.25 7.5l4.75 5 4.75-5H5.25z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right .65rem center;
+  background-size: 18px 18px;
+}
+
+/* date icon */
+input[type="date"].control::-webkit-calendar-picker-indicator { filter: grayscale(1) opacity(.7); }
+input[type="date"].control::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+
+/* input prefix / suffix */
+.input-wrap { position: relative; }
+.input-prefix, .input-suffix {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  font-weight: 600; color: var(--muted); pointer-events: none;
+}
+.input-prefix { left: 12px; }
+.input-suffix { right: 12px; }
+.input-wrap .control.with-prefix { padding-left: 2.1rem; }
+.input-wrap .control.with-suffix { padding-right: 2.1rem; }
+
+/* =========================
+   SEGMENTED SWITCH
+   ========================= */
+.segment {
+  display:inline-flex; gap:4px; padding:4px;
+  background: var(--panel-2); border:1px solid var(--line);
+  border-radius:12px;
+}
+.segment input { display:none; }
+.segment label {
+  padding:.45rem .8rem; border-radius:8px; cursor:pointer;
+  color: var(--muted); font-weight:700; font-size:.9rem;
+}
+.segment input:checked + label {
+  background: var(--control-focus); color: var(--ink);
+  border:1px solid color-mix(in oklab, var(--line), var(--accent) 20%);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--line), var(--accent) 15%);
+}
+
+/* =========================
+   KPI / PILL
+   ========================= */
+.pill { display:flex; flex-direction:column; gap:6px; padding:12px; border-radius:12px; background: linear-gradient(180deg, color-mix(in oklab,var(--panel),#000 2%), var(--panel)); border:1px solid var(--line) }
+.pill .label { font-size:.85rem; color:var(--muted); font-weight:700 }
+.pill .value { font-weight:900; font-size:1.2rem }
+
+/* =========================
+   TABLES -> mobile collapse
+   ========================= */
+.table-responsive { width:100%; overflow:auto; border-radius:10px; }
+.table-responsive table { width:100%; border-collapse:collapse; font-size:.95rem }
+
+/* collapse tables to stacked cards on small screens (mobile-first) */
+@media (max-width: 860px) {
+  .table-responsive table thead { display:none }
+  .table-responsive table, .table-responsive tbody, .table-responsive tr, .table-responsive td { display:block; width:100% }
+  .table-responsive tr { margin-bottom:12px }
+  .table-responsive td {
+    display:flex; justify-content:space-between; padding:.6rem .8rem; border:1px solid var(--line);
+    border-radius:10px; background: var(--panel); margin-bottom:8px;
+  }
+  .table-responsive td:before { content: attr(data-label); color:var(--muted); font-weight:700; margin-right:.6rem }
+}
+
+/* medium screens: slightly denser */
+@media (min-width: 861px) and (max-width: 1100px) {
+  .card { padding: 14px }
+  .container { padding: 14px }
+}
+
+/* tweaks for very small screens */
+@media (max-width: 420px) {
+  body { font-size:15px }
+  .brand { font-size:1rem }
+  .control, .select, .textarea { min-height:44px; padding:.55rem .75rem; font-size:.95rem }
+  .btn { min-height:44px; padding:.5rem .8rem; font-size:.95rem }
+  .card { padding:12px }
+}
+
+/* ======= small helpers, tags, pills ======= */
+.kpi-tile{ padding:12px; border-radius:12px; background: linear-gradient(180deg, color-mix(in oklab,var(--panel-2), #000 2%), var(--panel)); border:1px solid var(--line) }
+.tag { padding:.22rem .45rem; border-radius:8px; font-weight:700; font-size:.82rem; background:var(--chip-bg); color:var(--muted) }
+.paid-pill { background: linear-gradient(90deg, color-mix(in oklab,var(--ok),#000 6%), var(--pos-bg)); color:#0b221a; }
+.unpaid-pill { background: linear-gradient(90deg, color-mix(in oklab,var(--neg-bg),#000 6%), var(--neg-bg)); color:#3b0b0b }
+
+/* =========================
+   UTILS
+   ========================= */
+.muted { color: var(--muted); }
+.hr { height:1px; background: var(--line); border:0; margin:8px 0; }
+
+/* Focus ring (accessibility) */
+:focus { outline: none; box-shadow: 0 0 0 4px rgba(4,120,87,0.08); }
+
+/* Developer dense mode */
+.dense .card { padding:8px }
+.dense .control { min-height:36px; padding:.4rem .6rem }
+
+/* =========================
+   NOTES
+   - To keep a nav/tab dark in light mode: add class="tab-dark"
+   - You can tweak tokens near the top for global changes (ink, panel, accent)
+   - This CSS is mobile-first; tables collapse to stacked cards on small screens
+   ========================= */
