@@ -60,20 +60,15 @@ export default function AppShell() {
 
   // React to cross-tab storage events AND to same-tab in-memory events
   useEffect(() => {
-    // storage event covers cross-tab updates
     const onStorage = (e: StorageEvent) => {
       if (e.key && e.key !== "__sp_changed__") return;
       refreshBrand();
       refreshUser();
     };
-
-    // focus event to re-check on tab regain
     const onFocus = () => {
       refreshBrand();
       refreshUser();
     };
-
-    // custom DOM event (sp:changed) — dispatched by signalChange() and also defensively by login/logout code
     const onDom = () => {
       refreshBrand();
       refreshUser();
@@ -83,7 +78,6 @@ export default function AppShell() {
     window.addEventListener("focus", onFocus);
     window.addEventListener("sp:changed", onDom);
 
-    // subscribe to in-memory subscribers for same-tab immediate updates
     const unsub = subscribeChanges(() => {
       refreshBrand();
       refreshUser();
@@ -144,15 +138,13 @@ export default function AppShell() {
             </nav>
           )}
 
-          {/* Right section */}
+          {/* Right section for desktop */}
           <div className="items-center hidden gap-4 md:flex">
             {user ? (
               <>
                 {userChip}
                 <button
                   onClick={() => {
-                    // logout() calls setSession(null) -> signalChange() so subscribers/dom listeners will update.
-                    // We still defensively clear local state and navigate.
                     logout();
                     setUser(null);
                     nav("/login");
@@ -173,19 +165,28 @@ export default function AppShell() {
             )}
           </div>
 
-          {/* Mobile toggle */}
-          {user && (
-            <button
-              className="md:hidden rounded-md border border-[var(--line)] px-2 py-1 text-sm"
-              onClick={() => setOpen(v => !v)}
-              aria-label="Toggle menu"
-            >
-              ☰
-            </button>
-          )}
+          {/* Mobile action: show toggle when logged in, or a mobile Login button when not */}
+          <div className="md:hidden">
+            {user ? (
+              <button
+                className="rounded-md border border-[var(--line)] px-3 py-2 text-sm"
+                onClick={() => setOpen(v => !v)}
+                aria-label="Toggle menu"
+              >
+                ☰
+              </button>
+            ) : (
+              <Link
+                to="/login"
+                className="px-3 py-2 text-sm text-white bg-blue-600 rounded-md"
+              >
+                Login
+              </Link>
+            )}
+          </div>
         </div>
 
-        {/* Mobile menu */}
+        {/* Mobile menu (only for logged-in users) */}
         {user && open && (
           <div className="md:hidden border-t border-[var(--line)]">
             <div className="flex flex-col max-w-6xl gap-2 px-4 py-3 mx-auto">
