@@ -120,69 +120,79 @@ export default function AppShell() {
   return (
     <div className="flex flex-col min-h-screen">
       {/* Top bar */}
-      <header className="bg-[var(--panel)] border-b border-[var(--line)] sticky top-0 z-20">
-        <div className="flex items-center max-w-6xl gap-3 px-4 py-3 mx-auto">
-          <Link to="/" className="text-lg sm:text-xl font-semibold text-[var(--ink)] mr-auto">
-            {biz}
-          </Link>
+      <header className="bg-[var(--panel)] border-b border-[var(--line)] sticky top-0 z-30">
+        <div className="relative">
+          <div className="flex items-center justify-between max-w-6xl gap-3 px-4 py-3 mx-auto">
+            {/* Brand - shrink so it doesn't push right-side controls off-screen */}
+            <Link to="/" className="text-lg sm:text-xl font-semibold text-[var(--ink)] flex-shrink-0 truncate">
+              {biz}
+            </Link>
 
-          {/* Desktop nav */}
-          {user && (
-            <nav className="items-center hidden gap-4 mr-2 md:flex">
-              <Link to="/" className={`nav-link ${isActive("/") ? "active" : ""}`}>Home</Link>
-              <Link to="/products" className={`nav-link ${isActive("/products") ? "active" : ""}`}>Products</Link>
-              <Link to="/sales" className={`nav-link ${isActive("/sales") ? "active" : ""}`}>Stock Sales</Link>
-              <Link to="/transactions" className={`nav-link ${isActive("/transactions") ? "active" : ""}`}>Quick Sales</Link>
-              <Link to="/reports" className={`nav-link ${isActive("/reports") ? "active" : ""}`}>Reports</Link>
-              <Link to="/settings" className={`nav-link ${isActive("/settings") ? "active" : ""}`}>Settings</Link>
-            </nav>
-          )}
+            {/* Desktop nav */}
+            {user && (
+              <nav className="items-center hidden gap-4 mr-2 md:flex">
+                <Link to="/" className={`nav-link ${isActive("/") ? "active" : ""}`}>Home</Link>
+                <Link to="/products" className={`nav-link ${isActive("/products") ? "active" : ""}`}>Products</Link>
+                <Link to="/sales" className={`nav-link ${isActive("/sales") ? "active" : ""}`}>Stock Sales</Link>
+                <Link to="/transactions" className={`nav-link ${isActive("/transactions") ? "active" : ""}`}>Quick Sales</Link>
+                <Link to="/reports" className={`nav-link ${isActive("/reports") ? "active" : ""}`}>Reports</Link>
+                <Link to="/settings" className={`nav-link ${isActive("/settings") ? "active" : ""}`}>Settings</Link>
+              </nav>
+            )}
 
-          {/* Right section for desktop */}
-          <div className="items-center hidden gap-4 md:flex">
-            {user ? (
-              <>
-                {userChip}
-                <button
-                  onClick={() => {
-                    logout();
-                    setUser(null);
-                    nav("/login");
-                    try { window.dispatchEvent(new CustomEvent("sp:changed")); } catch {}
-                  }}
-                  className="px-3 py-2 text-sm text-white bg-red-500 rounded-md hover:bg-red-600"
+            {/* Right section for desktop */}
+            <div className="items-center hidden gap-4 md:flex">
+              {user ? (
+                <>
+                  {userChip}
+                  <button
+                    onClick={() => {
+                      logout();
+                      setUser(null);
+                      nav("/login");
+                      try { window.dispatchEvent(new CustomEvent("sp:changed")); } catch {}
+                    }}
+                    className="px-3 py-2 text-sm text-white bg-red-500 rounded-md hover:bg-red-600"
+                  >
+                    Logout
+                  </button>
+                </>
+              ) : (
+                <Link
+                  to="/login"
+                  className="px-3 py-2 text-sm text-white bg-blue-600 rounded-md hover:bg-blue-700"
                 >
-                  Logout
-                </button>
-              </>
-            ) : (
-              <Link
-                to="/login"
-                className="px-3 py-2 text-sm text-white bg-blue-600 rounded-md hover:bg-blue-700"
-              >
-                Login
-              </Link>
-            )}
-          </div>
+                  Login
+                </Link>
+              )}
+            </div>
 
-          {/* Mobile action: show toggle when logged in, or a mobile Login button when not */}
-          <div className="md:hidden">
-            {user ? (
-              <button
-                className="rounded-md border border-[var(--line)] px-3 py-2 text-sm"
-                onClick={() => setOpen(v => !v)}
-                aria-label="Toggle menu"
-              >
-                ☰
-              </button>
-            ) : (
-              <Link
-                to="/login"
-                className="px-3 py-2 text-sm text-white bg-blue-600 rounded-md"
-              >
-                Login
-              </Link>
-            )}
+            {/* Mobile action (always visible on small screens) */}
+            <div className="flex-shrink-0 md:hidden">
+              {user ? (
+                <button
+                  className="rounded-md border border-[var(--line)] px-3 py-2 text-sm"
+                  onClick={() => setOpen(v => !v)}
+                  aria-label="Toggle menu"
+                >
+                  ☰
+                </button>
+              ) : (
+                <Link
+                  to="/login"
+                  className="px-3 py-2 text-sm text-white bg-blue-600 rounded-md"
+                >
+                  Login
+                </Link>
+              )}
+            </div>
+
+            {/* Defensive absolute fallback so mobile action cannot be pushed off-screen:
+                Only shown visually on very narrow layouts where truncation still hides it.
+                It uses aria-hidden because real interactive element above handles clicks. */}
+            <div aria-hidden className="absolute pointer-events-none md:hidden right-4 top-3">
+              <div className="w-10 h-10" />
+            </div>
           </div>
         </div>
 
