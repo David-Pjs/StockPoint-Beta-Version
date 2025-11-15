@@ -19,7 +19,7 @@ import Button from "../../ui/Button";
 type Plan = "trial" | "free" | "small" | "large";
 const PLAN_LIMITS: Record<Plan, { productsMax: number }> = {
   trial: { productsMax: 80 },
-  free:  { productsMax: 80 },
+  free: { productsMax: 80 },
   small: { productsMax: 400 },
   large: { productsMax: 5000 },
 };
@@ -27,6 +27,11 @@ const PLAN_LIMITS: Record<Plan, { productsMax: number }> = {
 /* ------------------------- local helpers ------------------------- */
 const ARCH_KEY = "sp_archived_products:v1";
 const CATEGORY_KEY = "sp_category_suggestions:v1";
+
+/** IndexedDB config for long-lived product form draft */
+const IDB_PRODUCT_DB = "sp_product_form_db";
+const IDB_PRODUCT_STORE = "drafts";
+const IDB_PRODUCT_KEY = "current";
 
 function readSet(key: string): Set<string> {
   try {
@@ -48,6 +53,102 @@ function copy(text?: string | null) {
 }
 
 type SortKey = "new" | "name" | "stock" | "priceUp" | "priceDown";
+
+/* --------------------- IndexedDB helpers ------------------------ */
+function hasIndexedDB() {
+  return typeof indexedDB !== "undefined";
+}
+
+function openProductFormDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (!hasIndexedDB()) {
+      reject(new Error("IndexedDB not available"));
+      return;
+    }
+    const req = indexedDB.open(IDB_PRODUCT_DB, 1);
+    req.onerror = () => reject(req.error || new Error("IndexedDB error"));
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(IDB_PRODUCT_STORE)) {
+        db.createObjectStore(IDB_PRODUCT_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+  });
+}
+
+async function saveProductDraftToIdb(draft: Partial<Product>): Promise<void> {
+  if (!hasIndexedDB()) return;
+  try {
+    const db = await openProductFormDb();
+    const tx = db.transaction(IDB_PRODUCT_STORE, "readwrite");
+    tx.objectStore(IDB_PRODUCT_STORE).put(draft, IDB_PRODUCT_KEY);
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      tx.onerror = () => {
+        db.close();
+        reject(tx.error || new Error("tx error"));
+      };
+      tx.onabort = () => {
+        db.close();
+        reject(tx.error || new Error("tx abort"));
+      };
+    });
+  } catch {
+    // fail silently – UI must not break
+  }
+}
+
+async function loadProductDraftFromIdb(): Promise<Partial<Product> | null> {
+  if (!hasIndexedDB()) return null;
+  try {
+    const db = await openProductFormDb();
+    return await new Promise<Partial<Product> | null>((resolve, reject) => {
+      const tx = db.transaction(IDB_PRODUCT_STORE, "readonly");
+      const store = tx.objectStore(IDB_PRODUCT_STORE);
+      const req = store.get(IDB_PRODUCT_KEY);
+      req.onsuccess = () => {
+        const val = (req.result as Partial<Product> | undefined) || null;
+        db.close();
+        resolve(val);
+      };
+      req.onerror = () => {
+        db.close();
+        reject(req.error || new Error("get error"));
+      };
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function clearProductDraftFromIdb(): Promise<void> {
+  if (!hasIndexedDB()) return;
+  try {
+    const db = await openProductFormDb();
+    const tx = db.transaction(IDB_PRODUCT_STORE, "readwrite");
+    tx.objectStore(IDB_PRODUCT_STORE).delete(IDB_PRODUCT_KEY);
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      tx.onerror = () => {
+        db.close();
+        reject(tx.error || new Error("tx error"));
+      };
+      tx.onabort = () => {
+        db.close();
+        reject(tx.error || new Error("tx abort"));
+      };
+    });
+  } catch {
+    // ignore
+  }
+}
 
 /**
  * Manage products with gorgeous, responsive UI + plan caps.
@@ -93,6 +194,43 @@ export default function ProductsPage() {
   }
   useEffect(refresh, []); // load once
 
+  // load saved product form draft from IndexedDB on first mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const draft = await loadProductDraftFromIdb();
+      if (!draft || cancelled) return;
+      setForm((prev) => ({
+        ...prev,
+        ...draft,
+      }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // persist product form draft in IndexedDB (long-lived)
+  useEffect(() => {
+    const hasContent =
+      (form.name && String(form.name).trim().length > 0) ||
+      (form.sku && String(form.sku).trim().length > 0) ||
+      (form.category && String(form.category).trim().length > 0) ||
+      Number(form.cost_price || 0) > 0 ||
+      Number(form.sell_price || 0) > 0 ||
+      Number(form.qty_in_stock || 0) > 0 ||
+      Number(form.alert_threshold || 0) > 0;
+
+    if (!hasContent) {
+      // clear stored draft if form is basically empty
+      clearProductDraftFromIdb();
+      return;
+    }
+
+    // save current form as draft
+    void saveProductDraftToIdb(form);
+  }, [form]);
+
   // debounce search
   useEffect(() => {
     const t = setTimeout(() => setQDebounced(q.trim().toLowerCase()), 180);
@@ -115,16 +253,23 @@ export default function ProductsPage() {
 
   const productCap = PLAN_LIMITS[plan]?.productsMax ?? 80;
   const activeCount = activeItems.length;
-  const capLeft = Math.max(productCap - activeCount, 0);
   const capRatio = Math.min(activeCount / productCap, 1);
 
   const kpis = useMemo(() => {
     const list = items.filter((p) => showArchived || !archived.has(p.id));
     const total = list.length;
-    const invValue = list.reduce((s, p) => s + (Number(p.qty_in_stock) * Number(p.cost_price ?? 0)), 0);
-    const potential = list.reduce((s, p) => s + (Number(p.qty_in_stock) * Number(p.sell_price ?? 0)), 0);
+    const invValue = list.reduce(
+      (s, p) => s + Number(p.qty_in_stock) * Number(p.cost_price ?? 0),
+      0
+    );
+    const potential = list.reduce(
+      (s, p) => s + Number(p.qty_in_stock) * Number(p.sell_price ?? 0),
+      0
+    );
     const low = list.filter(
-      (p) => Number(p.alert_threshold ?? 0) > 0 && Number(p.qty_in_stock) <= Number(p.alert_threshold ?? 0)
+      (p) =>
+        Number(p.alert_threshold ?? 0) > 0 &&
+        Number(p.qty_in_stock) <= Number(p.alert_threshold ?? 0)
     ).length;
     return { total, invValue, potential, low };
   }, [items, archived, showArchived]);
@@ -162,11 +307,15 @@ export default function ProductsPage() {
   /* --------------------------- actions --------------------------- */
   function validateForm(): string | null {
     if (!form.name || !String(form.name).trim()) return "Product name is required.";
-    if (form.sell_price == null || isNaN(Number(form.sell_price))) return "Sell price is required.";
+    if (form.sell_price == null || isNaN(Number(form.sell_price)))
+      return "Sell price is required.";
     if (Number(form.sell_price) < 0) return "Sell price cannot be negative.";
-    if (form.cost_price != null && Number(form.cost_price) < 0) return "Cost price cannot be negative.";
-    if (form.qty_in_stock != null && Number(form.qty_in_stock) < 0) return "Stock quantity cannot be negative.";
-    if (form.alert_threshold != null && Number(form.alert_threshold) < 0) return "Alert threshold cannot be negative.";
+    if (form.cost_price != null && Number(form.cost_price) < 0)
+      return "Cost price cannot be negative.";
+    if (form.qty_in_stock != null && Number(form.qty_in_stock) < 0)
+      return "Stock quantity cannot be negative.";
+    if (form.alert_threshold != null && Number(form.alert_threshold) < 0)
+      return "Alert threshold cannot be negative.";
     return null;
   }
 
@@ -178,7 +327,7 @@ export default function ProductsPage() {
     if (activeCount >= productCap) {
       setErr(
         `Product limit reached for the ${plan.toUpperCase()} plan. (${activeCount}/${productCap}). ` +
-        `Archive old items or upgrade to add more.`
+          `Archive old items or upgrade to add more.`
       );
       return;
     }
@@ -200,7 +349,8 @@ export default function ProductsPage() {
         alert_threshold: Number(form.alert_threshold || 0),
       });
 
-      setForm({
+      // reset form + clear draft storage
+      const cleared: Partial<Product> = {
         name: "",
         sku: "",
         category: "",
@@ -208,7 +358,9 @@ export default function ProductsPage() {
         sell_price: 0,
         qty_in_stock: 0,
         alert_threshold: 0,
-      });
+      };
+      setForm(cleared);
+      void clearProductDraftFromIdb();
 
       setNote("Saved ✓");
       setTimeout(() => setNote(""), 900);
@@ -241,7 +393,11 @@ export default function ProductsPage() {
       const msg = String(e?.message || "").toLowerCase();
       alert(e?.message || "Failed to delete product");
       // Optional auto-archive fallback if core blocks delete:
-      if (msg.includes("cannot delete") || msg.includes("no record") || msg.includes("referenced")) {
+      if (
+        msg.includes("cannot delete") ||
+        msg.includes("no record") ||
+        msg.includes("referenced")
+      ) {
         archive(p.id);
       }
     }
@@ -273,11 +429,19 @@ export default function ProductsPage() {
           <div className="kpi-tile">
             <div className="flex items-center justify-between text-sm muted">
               <span>Products Cap</span>
-              <span className="opacity-80">{activeCount}/{productCap}</span>
+              <span className="opacity-80">
+                {activeCount}/{productCap}
+              </span>
             </div>
             <div className="h-2 mt-2 rounded bg-[var(--line)]/40 overflow-hidden">
               <div
-                className={`h-full ${capRatio < 0.85 ? "bg-green-500/80" : capRatio < 1 ? "bg-yellow-500/80" : "bg-red-500/80"}`}
+                className={`h-full ${
+                  capRatio < 0.85
+                    ? "bg-green-500/80"
+                    : capRatio < 1
+                    ? "bg-yellow-500/80"
+                    : "bg-red-500/80"
+                }`}
                 style={{ width: `${capRatio * 100}%` }}
               />
             </div>
@@ -314,7 +478,12 @@ export default function ProductsPage() {
                   placeholder="SKU"
                 />
                 {form.sku && (
-                  <button className="btn-ghost shrink-0" onClick={() => copy(form.sku!)}>Copy</button>
+                  <button
+                    className="btn-ghost shrink-0"
+                    onClick={() => copy(form.sku!)}
+                  >
+                    Copy
+                  </button>
                 )}
               </div>
             </InputRow>
@@ -329,7 +498,12 @@ export default function ProductsPage() {
                 list="catList"
               />
               <datalist id="catList">
-                {[...catSuggest].slice(0, 80).sort().map((v) => <option key={v} value={v} />)}
+                {[...catSuggest]
+                  .slice(0, 80)
+                  .sort()
+                  .map((v) => (
+                    <option key={v} value={v} />
+                  ))}
               </datalist>
             </InputRow>
           </div>
@@ -344,7 +518,9 @@ export default function ProductsPage() {
                   value={form.cost_price ?? 0}
                   min={0}
                   step="0.01"
-                  onChange={(e) => setForm((f) => ({ ...f, cost_price: +e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, cost_price: +e.target.value }))
+                  }
                 />
               </div>
             </InputRow>
@@ -359,7 +535,9 @@ export default function ProductsPage() {
                   value={form.sell_price ?? 0}
                   min={0}
                   step="0.01"
-                  onChange={(e) => setForm((f) => ({ ...f, sell_price: +e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, sell_price: +e.target.value }))
+                  }
                 />
               </div>
             </InputRow>
@@ -372,7 +550,9 @@ export default function ProductsPage() {
                 value={form.qty_in_stock ?? 0}
                 min={0}
                 step="1"
-                onChange={(e) => setForm((f) => ({ ...f, qty_in_stock: +e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, qty_in_stock: +e.target.value }))
+                }
               />
             </InputRow>
           </div>
@@ -384,7 +564,9 @@ export default function ProductsPage() {
                 value={form.alert_threshold ?? 0}
                 min={0}
                 step="1"
-                onChange={(e) => setForm((f) => ({ ...f, alert_threshold: +e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, alert_threshold: +e.target.value }))
+                }
               />
             </InputRow>
           </div>
@@ -394,11 +576,13 @@ export default function ProductsPage() {
         {note && <p className="mt-2 text-sm text-green-300">{note}</p>}
 
         <div className="flex flex-wrap items-center gap-2 mt-4">
-          <Button onClick={onSave} disabled={activeCount >= productCap}>Save</Button>
+          <Button onClick={onSave} disabled={activeCount >= productCap}>
+            Save
+          </Button>
           <button
             className="btn-ghost"
-            onClick={() =>
-              setForm({
+            onClick={() => {
+              const cleared: Partial<Product> = {
                 name: "",
                 sku: "",
                 category: "",
@@ -406,8 +590,10 @@ export default function ProductsPage() {
                 sell_price: 0,
                 qty_in_stock: 0,
                 alert_threshold: 0,
-              })
-            }
+              };
+              setForm(cleared);
+              void clearProductDraftFromIdb();
+            }}
           >
             Clear
           </button>
@@ -464,7 +650,9 @@ export default function ProductsPage() {
                       <div className="font-bold">{p.name}</div>
                       <div className="text-sm muted">{p.category || "—"}</div>
                     </div>
-                    <div className="font-extrabold text-right">{money(p.sell_price ?? 0)}</div>
+                    <div className="font-extrabold text-right">
+                      {money(p.sell_price ?? 0)}
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-2 mt-2">
                     <span className={`tag ${low ? "unpaid-pill" : "paid-pill"}`}>
@@ -476,21 +664,43 @@ export default function ProductsPage() {
                   <div className="mt-2 text-sm muted">
                     Margin:{" "}
                     <span className="text-[var(--ink)] font-semibold">
-                      {money(Number(p.sell_price ?? 0) - Number(p.cost_price ?? 0))}
+                      {money(
+                        Number(p.sell_price ?? 0) - Number(p.cost_price ?? 0)
+                      )}
                     </span>{" "}
-                    • Added {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : "—"}
+                    • Added{" "}
+                    {p.createdAt
+                      ? new Date(p.createdAt).toLocaleDateString()
+                      : "—"}
                   </div>
                   <div className="flex gap-2 mt-3">
                     {p.sku && (
-                      <button className="btn-ghost" onClick={() => copy(p.sku!)}>Copy SKU</button>
+                      <button className="btn-ghost" onClick={() => copy(p.sku!)}>
+                        Copy SKU
+                      </button>
                     )}
                     {admin &&
                       (archivedFlag ? (
-                        <button className="btn-ghost" onClick={() => restore(p.id)}>Restore</button>
+                        <button
+                          className="btn-ghost"
+                          onClick={() => restore(p.id)}
+                        >
+                          Restore
+                        </button>
                       ) : (
                         <>
-                          <button className="btn-ghost" onClick={() => archive(p.id)}>Archive</button>
-                          <button className="btn-ghost" onClick={() => onDelete(p)}>Delete</button>
+                          <button
+                            className="btn-ghost"
+                            onClick={() => archive(p.id)}
+                          >
+                            Archive
+                          </button>
+                          <button
+                            className="btn-ghost"
+                            onClick={() => onDelete(p)}
+                          >
+                            Delete
+                          </button>
                         </>
                       ))}
                   </div>
@@ -505,15 +715,33 @@ export default function ProductsPage() {
           <table className="w-full border-collapse text-[0.95rem]">
             <thead className="sticky top-0 bg-[#0f1722]">
               <tr className="text-left">
-                <th className="px-3 py-2 font-extrabold text-[var(--muted)]">Name</th>
-                <th className="px-3 py-2 font-extrabold text-[var(--muted)]">SKU</th>
-                <th className="px-3 py-2 font-extrabold text-[var(--muted)]">Category</th>
-                <th className="px-3 py-2 font-extrabold text-[var(--muted)]">Cost</th>
-                <th className="px-3 py-2 font-extrabold text-[var(--muted)]">Sell</th>
-                <th className="px-3 py-2 font-extrabold text-[var(--muted)]">Margin</th>
-                <th className="px-3 py-2 font-extrabold text-[var(--muted)]">Stock</th>
-                <th className="px-3 py-2 font-extrabold text-[var(--muted)]">Added</th>
-                <th className="px-3 py-2 font-extrabold text-[var(--muted)]">Added by</th>
+                <th className="px-3 py-2 font-extrabold text-[var(--muted)]">
+                  Name
+                </th>
+                <th className="px-3 py-2 font-extrabold text-[var(--muted)]">
+                  SKU
+                </th>
+                <th className="px-3 py-2 font-extrabold text-[var(--muted)]">
+                  Category
+                </th>
+                <th className="px-3 py-2 font-extrabold text-[var(--muted)]">
+                  Cost
+                </th>
+                <th className="px-3 py-2 font-extrabold text-[var(--muted)]">
+                  Sell
+                </th>
+                <th className="px-3 py-2 font-extrabold text-[var(--muted)]">
+                  Margin
+                </th>
+                <th className="px-3 py-2 font-extrabold text-[var(--muted)]">
+                  Stock
+                </th>
+                <th className="px-3 py-2 font-extrabold text-[var(--muted)]">
+                  Added
+                </th>
+                <th className="px-3 py-2 font-extrabold text-[var(--muted)]">
+                  Added by
+                </th>
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
@@ -533,33 +761,57 @@ export default function ProductsPage() {
                   return (
                     <tr
                       key={p.id}
-                      className={`border-b border-[var(--line)]/40 ${i % 2 === 0 ? "bg-[#0e1526]/30" : ""}`}
+                      className={`border-b border-[var(--line)]/40 ${
+                        i % 2 === 0 ? "bg-[#0e1526]/30" : ""
+                      }`}
                     >
                       <td className="px-3 py-2">
                         <div className="font-semibold">{p.name}</div>
-                        {archivedFlag && <div className="inline-block mt-1 text-xs tag">Archived</div>}
+                        {archivedFlag && (
+                          <div className="inline-block mt-1 text-xs tag">
+                            Archived
+                          </div>
+                        )}
                       </td>
                       <td className="px-3 py-2">
                         {p.sku ? (
                           <div className="flex items-center gap-2">
                             <span className="font-mono">{p.sku}</span>
-                            <button className="btn-ghost" onClick={() => copy(p.sku!)}>Copy</button>
+                            <button
+                              className="btn-ghost"
+                              onClick={() => copy(p.sku!)}
+                            >
+                              Copy
+                            </button>
                           </div>
                         ) : (
                           "—"
                         )}
                       </td>
                       <td className="px-3 py-2">{p.category || "—"}</td>
-                      <td className="px-3 py-2">{money(Number(p.cost_price ?? 0))}</td>
-                      <td className="px-3 py-2 font-extrabold">{money(Number(p.sell_price ?? 0))}</td>
                       <td className="px-3 py-2">
-                        {money(Number(p.sell_price ?? 0) - Number(p.cost_price ?? 0))}
+                        {money(Number(p.cost_price ?? 0))}
                       </td>
-                      <td className={`px-3 py-2 ${low ? "text-[var(--bad)] font-bold" : ""}`}>
+                      <td className="px-3 py-2 font-extrabold">
+                        {money(Number(p.sell_price ?? 0))}
+                      </td>
+                      <td className="px-3 py-2">
+                        {money(
+                          Number(p.sell_price ?? 0) -
+                            Number(p.cost_price ?? 0)
+                        )}
+                      </td>
+                      <td
+                        className={`px-3 py-2 ${
+                          low ? "text-[var(--bad)] font-bold" : ""
+                        }`}
+                      >
                         {Number(p.qty_in_stock)}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
-                        {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : "—"}
+                        {p.createdAt
+                          ? new Date(p.createdAt).toLocaleDateString()
+                          : "—"}
                       </td>
                       <td className="px-3 py-2">
                         {p.createdBy ? (
@@ -572,11 +824,15 @@ export default function ProductsPage() {
                                 />
                               ) : (
                                 <span className="text-[10px] opacity-70">
-                                  {(p.createdBy.username || "").slice(0, 2).toUpperCase()}
+                                  {(p.createdBy.username || "")
+                                    .slice(0, 2)
+                                    .toUpperCase()}
                                 </span>
                               )}
                             </div>
-                            <span className="text-xs">{p.createdBy.username}</span>
+                            <span className="text-xs">
+                              {p.createdBy.username}
+                            </span>
                             {p.createdBy.role && (
                               <span className="text-[10px] opacity-60 px-1 py-[1px] rounded border border-[var(--line)]">
                                 {p.createdBy.role}
@@ -591,11 +847,26 @@ export default function ProductsPage() {
                         <div className="flex flex-wrap gap-2">
                           {admin &&
                             (archivedFlag ? (
-                              <button className="btn-ghost" onClick={() => restore(p.id)}>Restore</button>
+                              <button
+                                className="btn-ghost"
+                                onClick={() => restore(p.id)}
+                              >
+                                Restore
+                              </button>
                             ) : (
                               <>
-                                <button className="btn-ghost" onClick={() => archive(p.id)}>Archive</button>
-                                <button className="btn-ghost" onClick={() => onDelete(p)}>Delete</button>
+                                <button
+                                  className="btn-ghost"
+                                  onClick={() => archive(p.id)}
+                                >
+                                  Archive
+                                </button>
+                                <button
+                                  className="btn-ghost"
+                                  onClick={() => onDelete(p)}
+                                >
+                                  Delete
+                                </button>
                               </>
                             ))}
                         </div>

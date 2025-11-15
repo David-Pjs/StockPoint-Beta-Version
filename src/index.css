@@ -1,22 +1,24 @@
-/* index.css — unified theme (keeps dark tabs unchanged in light mode) */
-/* Tailwind base kept (if using Tailwind v4) */
+/* index.css — unified theme with strict spacing & uniform form structure (UPDATED)
+   Purpose: polish form inputs, unify spacing, and improve receipt preview for PNG/print
+   Notes: keep Tailwind import if you still rely on it for utilities. This file intentionally
+   sets strong form tokens and adds a dedicated "receipt preview" styling block so the
+   html2canvas/print output looks professional.
+*/
 @import "tailwindcss";
 
-/* =========================
-   THEME TOKENS
-   ========================= */
-/* Dark = default */
-:root {
+:root{
+  /* palette (dark default) */
   --bg: #0d1117;
-  --panel: #161b22;
-  --panel-2: #0f1722;          /* deeper than panel (inputs/header) — used for dark tab look */
-  --ink: #f0f6fc;
+  --panel: #121417;
+  --panel-2: #0f1722;
+  --ink: #f5f8fb;
   --muted: #9ba3b0;
+  --line: #1f2937;
+
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
   --ok: #10b981;
   --bad: #ef4444;
-  --accent: #059669;
-  --accent-hover: #047857;
-  --line: #1f2937;
 
   --ghost: #142034;
   --ghost-hover: #1a2944;
@@ -25,335 +27,567 @@
   --control: #0f1722;
   --control-focus: #0e1526;
   --chip-bg: #102433;
-  --pos-bg: #0f2a22;
-  --neg-bg: #2a1517;
 
-  /* touch & sizing helpers */
-  --control-h: 48px;
-  --btn-radius: 10px;
+  /* sizing */
+  --sp: 12px;                 /* base spacing unit (use for margins/padding) */
+  --control-h: 48px;          /* control height (consistent) */
+  --control-font-size: 15.5px;
+  --btn-radius: 12px;
   --card-radius: 14px;
+
+  /* layout */
+  --sidebar-w: 280px;
+  --sidebar-collapsed-w: 72px;
+  --mobile-nav-h: 68px;
+  --content-max-w: 1200px;
+
+  /* table & form tokens */
+  --table-cell-padding: calc(var(--sp) + 2px);
+  --table-font-size: 0.96rem;
+  --table-zebra: rgba(255,255,255,0.02);
+  --table-border: rgba(255,255,255,0.04);
+  --table-header-bg: color-mix(in srgb, var(--panel), var(--accent) 4%);
+  --table-sticky-top: 68px;
+
+  /* structure */
+  --form-gap: calc(var(--sp) * 1.5);   /* 18px */
+  --form-label-w: 160px;
+  --field-radius: 12px;
+  --control-font-weight: 600;
+  --form-max-w: 1200px;
 }
 
-/* Light – OS preference (auto) - overall site appearance switches here */
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #f9fafb;
+/* Light mode tokens (OS preference) - unchanged semantics but tuned colors */
+@media (prefers-color-scheme: light){
+  :root{
+    --bg: #f7fafc;
     --panel: #ffffff;
-    --panel-2: #f4f6f8; /* used for input backgrounds in light mode */
-    --ink: #0f172a;
+    --panel-2: #f4f6f8;
+    --ink: #0f1724;
     --muted: #64748b;
-    --ok: #059669;
-    --bad: #b91c1c;
-    --accent: #047857;
-    --accent-hover: #065f46;
-    --line: #e5e7eb;
-
+    --line: #e6eef6;
+    --accent: #4f46e5;
+    --accent-hover: #4338ca;
     --ghost: #f5f7fb;
     --ghost-hover: #eef2f8;
-
-    --header: #ffffff;
+    --header: rgba(255,255,255,0.9);
     --control: #ffffff;
-    --control-focus: #f9fbfd;
+    --control-focus: #f0f6ff;
     --chip-bg: #eef6fb;
-    --pos-bg: #e8f6ee;
-    --neg-bg: #fdecee;
+
+    --table-zebra: rgba(15,23,42,0.02);
+    --table-border: rgba(15,23,42,0.06);
+    --table-header-bg: color-mix(in srgb, var(--panel-2), var(--accent) 3%);
   }
 }
 
-/* Manual override via data-theme attribute */
-:root[data-theme="dark"] { /* explicit dark — keep defaults */ }
-:root[data-theme="light"] { /* explicit light — mirror prefers-color-scheme */ 
-  --bg: #f9fafb;
-  --panel: #ffffff;
-  --panel-2: #f4f6f8;
-  --ink: #0f172a;
-  --muted: #64748b;
-  --ok: #059669;
-  --bad: #b91c1c;
-  --accent: #047857;
-  --accent-hover: #065f46;
-  --line: #e5e7eb;
-
-  --ghost: #f5f7fb;
-  --ghost-hover: #eef2f8;
-
-  --header: #ffffff;
-  --control: #ffffff;
-  --control-focus: #f9fbfd;
-  --chip-bg: #eef6fb;
-  --pos-bg: #e8f6ee;
-  --neg-bg: #fdecee;
-}
-
-/* =========================
-   TRANSITIONS / BASE
-   ========================= */
+/* ---------- BASE ---------- */
+* { box-sizing: border-box; }
 html, body, .card, .control, .select, .textarea, .app-header {
-  transition: background-color .20s ease, color .20s ease, border-color .18s ease, box-shadow .18s ease;
+  transition: background-color .18s ease, color .18s ease, border-color .16s ease, box-shadow .16s ease, transform .10s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
-
-body {
+body{
+  margin: 0;
   background: var(--bg);
   color: var(--ink);
   font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
   line-height: 1.45;
-  font-size: 16px;
+  font-size: var(--control-font-size);
   -webkit-tap-highlight-color: transparent;
 }
 
-/* container for centered content */
-.container {
-  max-width: 1200px;
+/* centered container */
+.container{
+  max-width: var(--content-max-w);
   margin: 0 auto;
-  padding: 18px;
+  padding: calc(var(--sp) * 1.7);
 }
 
-/* =========================
-   HEADER / NAV
-   ========================= */
-.app-header {
+/* ---------- HEADER / NAV ---------- */
+.app-header{
   background: var(--header);
   border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
-  z-index: 40;
-  backdrop-filter: blur(2px);
+  z-index: 60;
+  backdrop-filter: blur(6px);
 }
+.app-header .inner{
+  max-width: var(--content-max-w);
+  margin: 0 auto;
+  padding: calc(var(--sp) + 6px) calc(var(--sp) * 1.5);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.brand{ font-weight:800; letter-spacing:.2px; font-size:1.05rem; color:var(--ink); }
 
-.brand { font-weight: 700; letter-spacing: .2px; font-size: 1.05rem; color: var(--ink); }
+/* nav */
+.nav{ display:flex; gap:.5rem; align-items:center; }
+.nav a{
+  color: var(--muted);
+  padding:.48rem .7rem;
+  border-radius: 10px;
+  font-weight:700;
+  text-decoration:none;
+  font-size:.96rem;
+}
+.nav a:hover{ color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); }
+.nav a.active{ color: var(--ink); background: linear-gradient(180deg, color-mix(in srgb,var(--panel-2),var(--accent) 4%), var(--panel-2)); box-shadow: 0 6px 20px rgba(15,23,42,0.06); border:1px solid var(--line); }
 
-/* nav default */
-.nav { display:flex; gap:.5rem; align-items:center; }
-.nav a { color: var(--muted); padding:.5rem .65rem; border-radius:8px; font-weight:600; text-decoration:none; }
-.nav a:hover { color: var(--ink); background: var(--panel-2); }
-.nav a.active { color: var(--ink); background: var(--panel-2); border:1px solid var(--line); }
-
-/* ======
-   DARK TAB: if you want a tab/button to remain dark even in light mode,
-   add `class="tab-dark"` to it. This preserves the original dark look.
-   ====== */
-/* force-preserve dark-tab visual (explicit colors so light theme doesn't override) */
-.tab-dark {
-  background: #0f1722;       /* original dark tab background */
-  color: #f0f6fc;            /* original light text */
+/* ---------- DARK TAB PRESERVE ---------- */
+.tab-dark{
+  background: #0f1722;
+  color: #f0f6fc;
   border: 1px solid rgba(255,255,255,0.03);
   padding: .5rem .65rem;
   border-radius: 8px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: .4rem;
+  font-weight: 700;
+  display:inline-flex;
+  align-items:center;
+  gap:.4rem;
 }
-.tab-dark:hover { background: #111827 } /* subtle hover, still dark */
-.tab-dark.active { box-shadow: 0 0 0 3px rgba(5,150,105,0.06) }
 
-/* =========================
-   BUTTONS (touch-friendly)
-   ========================= */
-.btn {
+/* ---------- BUTTONS ---------- */
+.btn{
   display:inline-flex; align-items:center; justify-content:center;
   min-height: var(--control-h);
   padding: .6rem 1rem;
   background: var(--accent);
   color: #fff;
-  border-radius: 10px;
+  border-radius: var(--btn-radius);
   border: 1px solid transparent;
-  font-weight: 700;
+  font-weight:800;
+  box-shadow: 0 8px 24px rgba(79,70,229,0.07);
 }
-.btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
-.btn:disabled { opacity:.6; cursor:not-allowed; transform:none; }
+.btn:hover{ background: var(--accent-hover); transform: translateY(-2px); box-shadow: 0 14px 36px rgba(79,70,229,0.09); }
+.btn:disabled{ opacity:.6; cursor:not-allowed; transform:none; }
 
-/* ghost */
-.btn-ghost {
+.btn-ghost{
   min-height: var(--control-h);
   padding:.55rem .9rem;
   background: var(--ghost);
   color: var(--ink);
   border:1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--btn-radius);
   font-weight:700;
 }
-.btn-ghost:hover { background: var(--ghost-hover); }
+.btn-ghost:hover{ background: var(--ghost-hover); }
 
-/* danger */
-.btn-danger {
-  min-height: var(--control-h);
-  background: var(--neg-bg);
-  color: color-mix(in oklab, var(--bad), #fff 20%);
-  border-radius: 10px;
-  border:1px solid color-mix(in oklab, var(--neg-bg), #000 10%);
+/* grouped button consistency */
+.btn + .btn { margin-left: calc(var(--sp) / 2); }
+
+/* ---------- BADGES / AVATAR ---------- */
+.badge{
+  font-size: 12px;
+  line-height: 1;
+  padding: .28rem .55rem;
+  border-radius: 999px;
+  background: var(--chip-bg);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-weight:800;
 }
-.btn-danger:hover { filter: brightness(.98) }
-
-/* small */
-.btn.sm { min-height: 40px; padding: .45rem .7rem; font-size: .95rem }
-
-/* =========================
-   BADGES / AVATAR
-   ========================= */
-.badge {
-  font-size: 11px; line-height: 1;
-  padding: .32rem .55rem; border-radius: 999px;
-  background: var(--chip-bg); border:1px solid var(--line);
-  color: var(--muted); font-weight:700;
-}
-.avatar {
-  width: 32px; height: 32px; border-radius: 999px;
+.avatar{
+  width: 36px; height: 36px; border-radius: 999px;
   display:grid; place-items:center; font-weight:800;
   color:#0b221a; background: var(--ok);
+  box-shadow: 0 6px 18px rgba(11,34,26,0.08);
 }
 
-/* =========================
-   CARD
-   ========================= */
-.card {
+/* ---------- CARD ---------- */
+.card{
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 18px;
-  box-shadow: 0 6px 18px rgba(3,7,18,0.28);
+  border-radius: var(--card-radius);
+  padding: calc(var(--sp) * 1.6);
+  box-shadow: 0 12px 36px rgba(2,6,23,0.12);
+  margin-bottom: calc(var(--sp) * 1.8);
 }
-.card.compact { padding: 10px; border-radius: 10px }
+.card.compact{ padding: calc(var(--sp) * 1); border-radius: 12px; }
 
-/* =========================
-   FORM CONTROLS
-   ========================= */
-.control, .select, .textarea {
+/* ---------- FORMS / CONTROLS ---------- */
+/* Normalize the control height and font-size to ensure perfect alignment */
+.control, .select, .textarea{
   width: 100%;
   min-height: var(--control-h);
-  padding: .72rem .9rem;
+  height: var(--control-h);
+  padding: 0 .95rem;
   background: var(--control);
   color: var(--ink);
   border: 1px solid var(--line);
-  border-radius: 10px;
-  line-height: 1.25;
+  border-radius: var(--field-radius);
   outline: none;
+  font-weight:var(--control-font-weight);
+  font-size: var(--control-font-size);
+  display:flex; align-items:center;
+  line-height:1;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.015); /* subtle inner highlight */
 }
-.control::placeholder, .textarea::placeholder { color: var(--muted); }
+.control::placeholder, .textarea::placeholder{ color: var(--muted); font-weight:500; }
 
-.control:focus, .select:focus, .textarea:focus {
-  border-color: color-mix(in oklab, var(--accent), #000 10%);
-  box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent), #fff 75% / 16%);
+/* small visual tweak for high-contrast placeholder on dark backgrounds */
+.control:-webkit-autofill{ background-clip: padding-box; }
+
+/* focus state (clear & consistent) */
+.control:focus, .select:focus, .textarea:focus{
+  border-color: color-mix(in srgb, var(--accent), black 6%);
+  box-shadow: 0 8px 26px rgba(79,70,229,0.06);
+  background: var(--control-focus);
+  transform: translateY(-1px);
+}
+
+/* textarea grows but still respects vertical rhythm */
+.textarea{ min-height: calc(var(--control-h) * 2.2); resize: vertical; padding-top: .6rem; padding-bottom: .6rem; }
+
+/* helper text */
+.input-help{ font-size: .88rem; color: var(--muted); margin-top: calc(var(--sp) / 2); }
+
+/* remove default spinner for numbers and align numbers right */
+input[type="number"].control {
+  -moz-appearance: textfield;
+  text-align: right;
+  padding-right: 1rem;
+}
+input[type="number"].control::-webkit-outer-spin-button,
+input[type="number"].control::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* visual distinction for inputs that have currency prefix */
+.with-prefix{ padding-left: .8rem; padding-right: .9rem; }
+
+/* ---------- STRUCTURE: FORM GRID & FIELD ---------- */
+.field{
+  display:flex;
+  flex-direction:column;
+  gap: calc(var(--sp) / 2);
+  margin: 0;
+}
+
+.inline-field{
+  display:flex;
+  align-items:center;
+  gap: calc(var(--sp) * 1);
+}
+.inline-field .field > .form-label{ min-width: var(--form-label-w); margin-bottom:0; color:var(--muted); font-weight:800; }
+
+.form-row{
+  display:flex;
+  gap: calc(var(--sp) * 1.3);
+  align-items:flex-end; /* align baseline of inputs and labels */
+  width:100%;
+}
+
+.form-row-grid{
+  display:grid;
+  gap: calc(var(--sp) * 1.25);
+  width:100%;
+}
+.form-row-grid[data-cols="2"]{ grid-template-columns: repeat(2, 1fr); }
+.form-row-grid[data-cols="3"]{ grid-template-columns: repeat(3, 1fr); }
+.form-row-grid[data-cols="4"]{ grid-template-columns: repeat(4, 1fr); }
+.form-row-grid[data-cols="1fr-2fr"]{ grid-template-columns: 1fr 2fr; }
+
+.form-col{ flex:1; min-width:0; }
+.form-col-6{ flex:0 0 48%; max-width:48%; }
+.form-col-4{ flex:0 0 32%; max-width:32%; }
+.form-col-3{ flex:0 0 24%; max-width:24%; }
+.form-col-2{ flex:0 0 16%; max-width:16%; }
+.form-col-auto{ flex:0 0 auto; }
+
+@media (max-width:860px){
+  .form-row{ flex-direction:column; align-items:stretch; }
+  .form-row-grid{ grid-template-columns: 1fr !important; }
+  .inline-field{ flex-direction:column; align-items:stretch; }
+}
+
+.form-label{ display:block; font-weight:800; color:var(--muted); margin-bottom: calc(var(--sp) / 2); font-size: .95rem; }
+
+/* ---------- PREFIX / SUFFIX (currency) ---------- */
+/* Shared wrapper used by Unit/Amount fields so everything lines up cleanly */
+.input-wrap{
+  display:flex;
+  align-items:center;
+  width:100%;
+  max-width:100%;
+  height: var(--control-h);
+  background: var(--control);
+  border-radius: var(--field-radius);
+  border:1px solid var(--line);
+  overflow:hidden;
+}
+.input-prefix{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-width:40px;
+  padding:0 10px;
+  font-size:.9rem;
+  font-weight:800;
+  color:var(--muted);
+}
+.input-wrap .control.with-prefix{
+  height:100%;
+  border:none;
+  border-radius:0;
+  box-shadow:none;
+  padding-left:.5rem;
+  padding-right:.9rem;
+  text-align:right;
+}
+.input-wrap:focus-within{
+  border-color: color-mix(in srgb, var(--accent), black 6%);
+  box-shadow: 0 8px 26px rgba(79,70,229,0.06);
   background: var(--control-focus);
 }
 
-/* textarea */
-.textarea { min-height: 96px; resize: vertical; }
-
-/* number: remove spinners */
-input[type="number"].control { -moz-appearance: textfield; }
-input[type="number"].control::-webkit-outer-spin-button,
-input[type="number"].control::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-
-/* select caret */
-.select {
-  -webkit-appearance: none; appearance: none;
-  padding-right: 2.25rem;
-  background-image:
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 20 20' fill='%23a3b0bf'><path d='M5.25 7.5l4.75 5 4.75-5H5.25z'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right .65rem center;
-  background-size: 18px 18px;
+/* legacy helper (still works anywhere else you use it) */
+.field-with-prefix{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.field-with-prefix .input-prefix{
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:48px; height: calc(var(--control-h) - 4px);
+  border-radius: 10px; color:var(--muted); font-weight:800; border:1px solid var(--line);
+  background: color-mix(in srgb, var(--panel), white 2%);
+  padding: 0 8px;
+}
+.field-with-prefix .control{
+  border-radius: 10px;
+  padding-left: .8rem;
+  height: var(--control-h);
 }
 
-/* date icon */
-input[type="date"].control::-webkit-calendar-picker-indicator { filter: grayscale(1) opacity(.7); }
-input[type="date"].control::-webkit-calendar-picker-indicator:hover { opacity: 1; }
-
-/* input prefix / suffix */
-.input-wrap { position: relative; }
-.input-prefix, .input-suffix {
-  position: absolute; top: 50%; transform: translateY(-50%);
-  font-weight: 600; color: var(--muted); pointer-events: none;
+/* ---------- LINE ITEMS / INVOICE ROWS (more rigid widths) ---------- */
+.line-items{
+  width:100%;
+  display:flex; flex-direction:column; gap:12px;
 }
-.input-prefix { left: 12px; }
-.input-suffix { right: 12px; }
-.input-wrap .control.with-prefix { padding-left: 2.1rem; }
-.input-wrap .control.with-suffix { padding-right: 2.1rem; }
 
-/* =========================
-   SEGMENTED SWITCH
-   ========================= */
-.segment {
-  display:inline-flex; gap:4px; padding:4px;
-  background: var(--panel-2); border:1px solid var(--line);
+.line-items .li-header,
+.line-items .line-item{
+  display:grid;
+  grid-template-columns: 1fr 90px 130px 150px 110px; /* desc, qty, unit, amount, actions */
+  gap:12px;
+  align-items:center;
+}
+.line-items .li-header{
+  padding:10px 14px; border-radius:10px; background: var(--table-header-bg); border:1px solid var(--table-border); font-weight:900; color:var(--ink);
+}
+.line-items .line-item{
+  padding:12px 14px; border-radius:12px; background:var(--panel); border:1px solid var(--line); font-weight:700;
+}
+.line-items .line-item:nth-child(even){ background: color-mix(in srgb, var(--panel), var(--table-zebra) 50%); }
+
+@media (max-width:860px){
+  .line-items .li-header{ display:none; }
+  .line-items .line-item{ display:flex; flex-direction:column; gap:8px; }
+  .line-items .line-item .row{ display:flex; justify-content:space-between; gap:10px; width:100%; }
+}
+
+.line-items .btn-remove{ background:transparent; border:1px solid var(--line); color:var(--muted); padding:.45rem .8rem; border-radius:10px; font-weight:800; }
+.line-items .btn-remove:hover{ color:var(--bad); border-color: color-mix(in srgb,var(--bad),black 6%); }
+
+/* ---------- TABLES (uniform) ---------- */
+.table-responsive{
+  width:100%;
+  overflow:auto;
   border-radius:12px;
+  -webkit-overflow-scrolling: touch;
+  background: transparent;
+  padding: 4px;
 }
-.segment input { display:none; }
-.segment label {
-  padding:.45rem .8rem; border-radius:8px; cursor:pointer;
-  color: var(--muted); font-weight:700; font-size:.9rem;
+.table-responsive table{
+  width:100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--table-font-size);
+  min-width: 680px;
+  table-layout: auto;
 }
-.segment input:checked + label {
-  background: var(--control-focus); color: var(--ink);
-  border:1px solid color-mix(in oklab, var(--line), var(--accent) 20%);
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--line), var(--accent) 15%);
+.table-responsive thead th{
+  position: sticky;
+  top: calc(var(--table-sticky-top) + 0px);
+  z-index: 20;
+  text-align: left;
+  padding: var(--table-cell-padding);
+  font-weight: 800;
+  letter-spacing: .2px;
+  background: var(--table-header-bg);
+  border-bottom: 1px solid var(--table-border);
+  color: var(--ink);
+}
+.table-responsive tbody td{
+  padding: var(--table-cell-padding);
+  border-bottom: 1px solid var(--table-border);
+  vertical-align: middle;
+  color: var(--ink);
+  background: var(--panel);
+  font-weight: 600;
+}
+.table-responsive tbody tr:nth-child(even) td{
+  background: color-mix(in srgb, var(--panel), var(--table-zebra) 50%);
 }
 
-/* =========================
-   KPI / PILL
-   ========================= */
-.pill { display:flex; flex-direction:column; gap:6px; padding:12px; border-radius:12px; background: linear-gradient(180deg, color-mix(in oklab,var(--panel),#000 2%), var(--panel)); border:1px solid var(--line) }
-.pill .label { font-size:.85rem; color:var(--muted); font-weight:700 }
-.pill .value { font-weight:900; font-size:1.2rem }
-
-/* =========================
-   TABLES -> mobile collapse
-   ========================= */
-.table-responsive { width:100%; overflow:auto; border-radius:10px; }
-.table-responsive table { width:100%; border-collapse:collapse; font-size:.95rem }
-
-/* collapse tables to stacked cards on small screens (mobile-first) */
-@media (max-width: 860px) {
-  .table-responsive table thead { display:none }
-  .table-responsive table, .table-responsive tbody, .table-responsive tr, .table-responsive td { display:block; width:100% }
-  .table-responsive tr { margin-bottom:12px }
-  .table-responsive td {
-    display:flex; justify-content:space-between; padding:.6rem .8rem; border:1px solid var(--line);
+@media (max-width: 860px){
+  .table-responsive table thead{ display:none; }
+  .table-responsive table, .table-responsive tbody, .table-responsive tr, .table-responsive td{ display:block; width:100%; }
+  .table-responsive tr{ margin-bottom:12px; }
+  .table-responsive td{
+    display:flex; justify-content:space-between;
+    padding:.7rem .9rem; border:1px solid var(--line);
     border-radius:10px; background: var(--panel); margin-bottom:8px;
   }
-  .table-responsive td:before { content: attr(data-label); color:var(--muted); font-weight:700; margin-right:.6rem }
+  .table-responsive td:before{ content: attr(data-label); color:var(--muted); font-weight:800; margin-right:8px; }
 }
 
-/* medium screens: slightly denser */
-@media (min-width: 861px) and (max-width: 1100px) {
-  .card { padding: 14px }
-  .container { padding: 14px }
+/* ---------- SUMMARY / TOTALS ---------- */
+.summary-box{
+  display:flex; gap:18px; align-items:center; justify-content:flex-end; width:100%;
+  margin-top:18px;
+}
+.summary-value{
+  display:flex; flex-direction:column; align-items:flex-end; gap:6px; min-width:220px;
+  font-weight:900;
+}
+.summary-value .label{ color:var(--muted); font-weight:800; font-size:.95rem; }
+.summary-value .amount{ font-size:1.4rem; color:var(--ink); font-weight:900; letter-spacing:0.6px; }
+
+.summary-actions{ display:flex; gap:10px; align-items:center; }
+@media (max-width:860px){
+  .summary-box{ flex-direction:column; align-items:stretch; justify-content:flex-start; }
+  .summary-value{ align-items:flex-start; }
+  .summary-actions{ justify-content:flex-start; }
 }
 
-/* tweaks for very small screens */
-@media (max-width: 420px) {
-  body { font-size:15px }
-  .brand { font-size:1rem }
-  .control, .select, .textarea { min-height:44px; padding:.55rem .75rem; font-size:.95rem }
-  .btn { min-height:44px; padding:.5rem .8rem; font-size:.95rem }
-  .card { padding:12px }
+/* primary / secondary */
+.btn-primary{ min-height:44px; padding:.55rem .95rem; border-radius:10px; font-weight:900; }
+.btn-secondary{ min-height:44px; padding:.55rem .95rem; background:var(--ghost); color:var(--ink); border:1px solid var(--line); border-radius:10px; }
+
+/* ---------- SIDEBAR / LAYOUT ---------- */
+.sidebar{
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  border-right: 1px solid var(--line);
+  background: linear-gradient(180deg, color-mix(in srgb,var(--panel),black 2%), var(--panel));
+  padding: calc(var(--sp) * 1.5);
+}
+.sidebar.collapsed{ width: var(--sidebar-collapsed-w); padding-left:10px; padding-right:10px; }
+
+.app-shell{ display:flex; min-height:100vh; gap:0; }
+.content-wrap{ flex:1; min-width:0; display:flex; flex-direction:column; }
+.page{ max-width: var(--content-max-w); margin: calc(var(--sp) * 1.5) auto; padding: calc(var(--sp) * 1.4); width:100%; }
+
+@media (max-width:767px){ .page{ padding-bottom: calc(var(--mobile-nav-h) + 22px); } }
+
+/* ---------- MOBILE NAV ---------- */
+.mobile-nav{
+  position: fixed;
+  left: 12px; right: 12px; bottom: 12px;
+  height: var(--mobile-nav-h); display:flex; align-items:center; justify-content:space-around;
+  border-radius: 14px; background: color-mix(in srgb, var(--panel), white 2%); border: 1px solid var(--line);
+  padding: 8px 12px; z-index: 70; box-shadow: 0 14px 40px rgba(2,6,23,0.20);
+}
+.mobile-nav a{ display:flex; flex-direction:column; align-items:center; gap:6px; color:var(--muted); text-decoration:none; font-weight:700; font-size:11px; width:64px; }
+.mobile-nav a .icon-wrap{ width:44px; height:44px; display:grid; place-items:center; border-radius:999px; background: color-mix(in srgb,var(--panel-2),white 2%); }
+.mobile-nav a.active{ color:var(--ink); transform:scale(1.02); }
+.mobile-nav a.active .icon-wrap{ background: color-mix(in srgb,var(--panel-2),var(--accent) 8%); }
+
+/* ---------- UTILITIES ---------- */
+.muted{ color: var(--muted); }
+.hr{ height:1px; background: var(--line); border:0; margin: calc(var(--sp) * 0.9) 0; border-radius:2px; }
+
+/* focus ring for accessibility (subtle but visible) */
+:focus{ outline:none; box-shadow: 0 10px 30px rgba(79,70,229,0.06); border-color: var(--accent); }
+
+/* dense mode tuning */
+.dense .card{ padding: calc(var(--sp) * 1); }
+.dense .control{ min-height:36px; padding:.4rem .6rem }
+
+/* responsive tweaks */
+@media (max-width:1024px){ :root{ --sidebar-w:240px; } }
+@media (max-width:860px){
+  .sidebar{ display:none; }
+  .app-header .inner{ padding-left:12px; padding-right:12px; }
+  .page{ padding:12px; margin:12px; }
+  .mobile-nav{ left:10px; right:10px; bottom:10px; }
+}
+@media (max-width:420px){
+  body{ font-size:15px }
+  .brand{ font-size:1rem }
+  .control, .select, .textarea{ min-height:44px; padding:.55rem .75rem; font-size:.95rem }
+  .btn{ min-height:44px; padding:.5rem .8rem; font-size:.95rem }
+  .card{ padding:12px }
 }
 
-/* ======= small helpers, tags, pills ======= */
-.kpi-tile{ padding:12px; border-radius:12px; background: linear-gradient(180deg, color-mix(in oklab,var(--panel-2), #000 2%), var(--panel)); border:1px solid var(--line) }
-.tag { padding:.22rem .45rem; border-radius:8px; font-weight:700; font-size:.82rem; background:var(--chip-bg); color:var(--muted) }
-.paid-pill { background: linear-gradient(90deg, color-mix(in oklab,var(--ok),#000 6%), var(--pos-bg)); color:#0b221a; }
-.unpaid-pill { background: linear-gradient(90deg, color-mix(in oklab,var(--neg-bg),#000 6%), var(--neg-bg)); color:#3b0b0b }
+/* ---------- PRINT / PDF FRIENDLY ---------- */
+@media print{
+  :root{ --control-h: 44px; --btn-radius: 8px; }
+  body{ background: white; color: black; }
+  .app-header, .mobile-nav, .sidebar, .page { display: none !important; }
+  .container, .card, .table-responsive, .line-items{ box-shadow: none !important; border: none !important; background: transparent !important; }
+  .print-only{ display: block; }
+  .table-responsive table{ min-width: 0; width: 100%; font-size: 12pt; }
+  .table-responsive thead th{ position: static; background: transparent; color: black; }
+  .table-responsive tbody td{ background: transparent; color: black; border: 1px solid #e6e6e6; }
+}
 
-/* =========================
-   UTILS
-   ========================= */
-.muted { color: var(--muted); }
-.hr { height:1px; background: var(--line); border:0; margin:8px 0; }
+/* ========== RECEIPT PREVIEW (PNG & PRINT FRIENDLY) ========== */
+/* The ReceiptView component clones the DOM node and html2canvas/print will pick these styles.
+   Keep selectors specific and add fallbacks so the preview is consistent and professional. */
 
-/* Focus ring (accessibility) */
-:focus { outline: none; box-shadow: 0 0 0 4px rgba(4,120,87,0.08); }
+#sp-receipt-card{
+  width: 760px !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  font-family: Inter, Arial, sans-serif !important;
+  color: #0f1724 !important;
+  padding: 18px !important;
+  background: #ffffff !important;
+  border-radius: 8px !important;
+  border: 1px solid #e6eef6 !important;
+  box-shadow: 0 8px 30px rgba(2,6,23,0.06) !important;
+}
+#sp-receipt-card *{ box-sizing: border-box !important; }
+#sp-receipt-card .company-name{ font-weight:800; font-size:20px; color:#0b1220; }
+#sp-receipt-card .company-meta{ color:#6b7280; font-size:11px; margin-top:6px; line-height:1.2; }
+#sp-receipt-card .invoice-title{ text-transform:uppercase; font-weight:800; font-size:22px; color:#0b1220; }
+#sp-receipt-card .accent-bar{ height:8px; background:#0f62ff; margin:12px 0; border-radius:3px; }
+#sp-receipt-card .meta-wrap{ display:flex; gap:12px; align-items:stretch; flex-wrap:wrap; margin-bottom:12px; }
+#sp-receipt-card .meta-left,
+#sp-receipt-card .meta-right{
+  padding:12px; border:1px solid #eef2f7; border-radius:8px; min-width:220px;
+}
+#sp-receipt-card table{ width:100%; border-collapse: collapse; font-size:13px; table-layout: fixed; word-break: break-word; }
+#sp-receipt-card thead{ background:#0b1220; color:#fff; }
+#sp-receipt-card thead th{ text-align:left; padding:12px; }
+#sp-receipt-card tbody td{ padding:12px; border-bottom: 1px solid #eef2f7; }
+#sp-receipt-card tbody tr:last-child td{ border-bottom: none; }
+#sp-receipt-card .total-line{ display:flex; justify-content:flex-end; margin-top:12px; }
+#sp-receipt-card .total-line .total{ font-size:16px; margin-top:8px; color:#0f62ff; font-weight:800; }
+#sp-receipt-card .footer-meta{ border-top:1px solid #eef2f7; margin-top:14px; padding-top:8px; font-size:11px; color:#6b7280; }
 
-/* Developer dense mode */
-.dense .card { padding:8px }
-.dense .control { min-height:36px; padding:.4rem .6rem }
+/* ensure print-friendly sizing for canvas outputs */
+@media print{
+  #sp-receipt-card{ box-shadow:none !important; border:none !important; width:100% !important; max-width: 760px !important; margin: 0 auto !important; }
+  #sp-receipt-card table{ font-size:12px; }
+}
 
-/* =========================
-   NOTES
-   - To keep a nav/tab dark in light mode: add class="tab-dark"
-   - You can tweak tokens near the top for global changes (ink, panel, accent)
-   - This CSS is mobile-first; tables collapse to stacked cards on small screens
-   ========================= */
+/* small helper for the preview modal to centre nicely */
+.modal-receipt-wrap{ display:flex; justify-content:center; }
+
+/* Make preview buttons consistent with UI */
+.modal-actions .btn, .modal-actions .btn-ghost{ min-width: 140px; }
+
+/* ---------- USAGE NOTES ----------
+- Use .field to wrap a label + control: <div class="field"><label class="form-label">Name</label><input class="control" /></div>
+- For currency prefixed inputs: <div class="input-wrap"><span class="input-prefix">₦</span><input class="control with-prefix"/></div>
+- Line items: use .line-items with .li-header + .line-item
+--------------------------------- */

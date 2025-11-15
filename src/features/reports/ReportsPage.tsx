@@ -203,6 +203,62 @@ type DayRow = {
   aov: number;
 };
 
+/* ------------- persistent report preference helpers ------------- */
+
+const REPORT_PREF_KEY = "sp_report_prefs:v1";
+
+type ReportPrefs = {
+  range: RangeKey;
+  dayDate: string;
+  monthKey: string;
+  startDate: string;
+  endDate: string;
+  includeQuickTx: boolean;
+};
+
+function isValidYMD(s: unknown): s is string {
+  return typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+function isValidMonthKey(s: unknown): s is string {
+  return typeof s === "string" && /^\d{4}-\d{2}$/.test(s);
+}
+function isValidRangeKey(s: unknown): s is RangeKey {
+  return s === "today" || s === "7d" || s === "month" || s === "custom";
+}
+
+function loadReportPrefs(): ReportPrefs | null {
+  try {
+    const raw = localStorage.getItem(REPORT_PREF_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<ReportPrefs>;
+    if (!isValidRangeKey(parsed.range)) return null;
+
+    const fallbackToday = todayYMD();
+    const fallbackMonth = monthKeyFromYMD(fallbackToday);
+
+    const prefs: ReportPrefs = {
+      range: parsed.range,
+      dayDate: isValidYMD(parsed.dayDate) ? parsed.dayDate : fallbackToday,
+      monthKey: isValidMonthKey(parsed.monthKey) ? parsed.monthKey : fallbackMonth,
+      startDate: isValidYMD(parsed.startDate) ? parsed.startDate : addDays(fallbackToday, -6),
+      endDate: isValidYMD(parsed.endDate) ? parsed.endDate : fallbackToday,
+      includeQuickTx:
+        typeof parsed.includeQuickTx === "boolean" ? parsed.includeQuickTx : true,
+    };
+    return prefs;
+  } catch {
+    return null;
+  }
+}
+
+function saveReportPrefs(p: ReportPrefs) {
+  try {
+    localStorage.setItem(REPORT_PREF_KEY, JSON.stringify(p));
+  } catch {
+    // ignore – do not break UI
+  }
+}
+
 export default function ReportsPage() {
   /* -------- range + options -------- */
   const [range, setRange] = useState<RangeKey>("today");
@@ -211,6 +267,31 @@ export default function ReportsPage() {
   const [startDate, setStartDate] = useState<string>(addDays(todayYMD(), -6));
   const [endDate, setEndDate] = useState<string>(todayYMD());
   const [includeQuickTx, setIncludeQuickTx] = useState(true);
+
+  // Load persisted report preferences once on mount
+  useEffect(() => {
+    const prefs = loadReportPrefs();
+    if (!prefs) return;
+    setRange(prefs.range);
+    setDayDate(prefs.dayDate);
+    setMonthKey(prefs.monthKey);
+    setStartDate(prefs.startDate);
+    setEndDate(prefs.endDate);
+    setIncludeQuickTx(prefs.includeQuickTx);
+  }, []);
+
+  // Persist report preferences whenever they change
+  useEffect(() => {
+    const prefs: ReportPrefs = {
+      range,
+      dayDate,
+      monthKey,
+      startDate,
+      endDate,
+      includeQuickTx,
+    };
+    saveReportPrefs(prefs);
+  }, [range, dayDate, monthKey, startDate, endDate, includeQuickTx]);
 
   /* -------- realtime pulse (cross-tab + same-tab) -------- */
   const [pulse, setPulse] = useState(0);
@@ -387,7 +468,6 @@ export default function ReportsPage() {
     }
     // custom: previous block same length directly before startDate
     const out: string[] = [];
-    let d = startDate;
     const len = (new Date(endDate).getTime() - new Date(startDate).getTime()) / (24*3600*1000) + 1;
     for (let i = len; i > 0; i--) {
       const pd = addDays(startDate, -i);

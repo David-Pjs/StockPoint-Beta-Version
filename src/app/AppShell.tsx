@@ -1,4 +1,3 @@
-// src/app/AppShell.tsx
 import { useEffect, useMemo, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { getCurrentUser, logout, subscribeChanges } from "../index";
@@ -19,7 +18,11 @@ function colorFor(name: string) {
 
 export default function AppShell() {
   const [user, setUser] = useState<MinimalUser | null>(() => {
-    try { return getCurrentUser(); } catch { return null; }
+    try {
+      return getCurrentUser();
+    } catch {
+      return null;
+    }
   });
   const [biz, setBiz] = useState<string>(() => {
     try {
@@ -92,7 +95,9 @@ export default function AppShell() {
   }, []);
 
   // Close mobile menu on route change
-  useEffect(() => { setOpen(false); }, [loc.pathname]);
+  useEffect(() => {
+    setOpen(false);
+  }, [loc.pathname]);
 
   const isActive = (path: string) => loc.pathname === path;
 
@@ -131,12 +136,24 @@ export default function AppShell() {
             {/* Desktop nav */}
             {user && (
               <nav className="items-center hidden gap-4 mr-2 md:flex">
-                <Link to="/" className={`nav-link ${isActive("/") ? "active" : ""}`}>Home</Link>
-                <Link to="/products" className={`nav-link ${isActive("/products") ? "active" : ""}`}>Products</Link>
-                <Link to="/sales" className={`nav-link ${isActive("/sales") ? "active" : ""}`}>Stock Sales</Link>
-                <Link to="/transactions" className={`nav-link ${isActive("/transactions") ? "active" : ""}`}>Quick Sales</Link>
-                <Link to="/reports" className={`nav-link ${isActive("/reports") ? "active" : ""}`}>Reports</Link>
-                <Link to="/settings" className={`nav-link ${isActive("/settings") ? "active" : ""}`}>Settings</Link>
+                <Link to="/" className={`nav-link ${isActive("/") ? "active" : ""}`}>
+                  Home
+                </Link>
+                <Link to="/products" className={`nav-link ${isActive("/products") ? "active" : ""}`}>
+                  Products
+                </Link>
+                <Link to="/sales" className={`nav-link ${isActive("/sales") ? "active" : ""}`}>
+                  Stock Sales
+                </Link>
+                <Link to="/transactions" className={`nav-link ${isActive("/transactions") ? "active" : ""}`}>
+                  Quick Sales
+                </Link>
+                <Link to="/reports" className={`nav-link ${isActive("/reports") ? "active" : ""}`}>
+                  Reports
+                </Link>
+                <Link to="/settings" className={`nav-link ${isActive("/settings") ? "active" : ""}`}>
+                  Settings
+                </Link>
               </nav>
             )}
 
@@ -150,7 +167,9 @@ export default function AppShell() {
                       logout();
                       setUser(null);
                       nav("/login");
-                      try { window.dispatchEvent(new CustomEvent("sp:changed")); } catch {}
+                      try {
+                        window.dispatchEvent(new CustomEvent("sp:changed"));
+                      } catch {}
                     }}
                     className="px-3 py-2 text-sm text-white bg-red-500 rounded-md hover:bg-red-600"
                   >
@@ -158,10 +177,7 @@ export default function AppShell() {
                   </button>
                 </>
               ) : (
-                <Link
-                  to="/login"
-                  className="px-3 py-2 text-sm text-white bg-blue-600 rounded-md hover:bg-blue-700"
-                >
+                <Link to="/login" className="px-3 py-2 text-sm text-white bg-blue-600 rounded-md hover:bg-blue-700">
                   Login
                 </Link>
               )}
@@ -172,16 +188,13 @@ export default function AppShell() {
               {user ? (
                 <button
                   className="rounded-md border border-[var(--line)] px-3 py-2 text-sm"
-                  onClick={() => setOpen(v => !v)}
+                  onClick={() => setOpen((v) => !v)}
                   aria-label="Toggle menu"
                 >
                   ☰
                 </button>
               ) : (
-                <Link
-                  to="/login"
-                  className="px-3 py-2 text-sm text-white bg-blue-600 rounded-md"
-                >
+                <Link to="/login" className="px-3 py-2 text-sm text-white bg-blue-600 rounded-md">
                   Login
                 </Link>
               )}
@@ -202,19 +215,33 @@ export default function AppShell() {
             <div className="flex flex-col max-w-6xl gap-2 px-4 py-3 mx-auto">
               {userChip}
               <div className="grid grid-cols-2 gap-2 mt-2">
-                <Link to="/" className={`nav-link ${isActive("/") ? "active" : ""}`}>Home</Link>
-                <Link to="/products" className={`nav-link ${isActive("/products") ? "active" : ""}`}>Products</Link>
-                <Link to="/sales" className={`nav-link ${isActive("/sales") ? "active" : ""}`}>Stock Sales</Link>
-                <Link to="/transactions" className={`nav-link ${isActive("/transactions") ? "active" : ""}`}>Quick Sales</Link>
-                <Link to="/reports" className={`nav-link ${isActive("/reports") ? "active" : ""}`}>Reports</Link>
-                <Link to="/settings" className={`nav-link ${isActive("/settings") ? "active" : ""}`}>Settings</Link>
+                <Link to="/" className={`nav-link ${isActive("/") ? "active" : ""}`}>
+                  Home
+                </Link>
+                <Link to="/products" className={`nav-link ${isActive("/products") ? "active" : ""}`}>
+                  Products
+                </Link>
+                <Link to="/sales" className={`nav-link ${isActive("/sales") ? "active" : ""}`}>
+                  Stock Sales
+                </Link>
+                <Link to="/transactions" className={`nav-link ${isActive("/transactions") ? "active" : ""}`}>
+                  Quick Sales
+                </Link>
+                <Link to="/reports" className={`nav-link ${isActive("/reports") ? "active" : ""}`}>
+                  Reports
+                </Link>
+                <Link to="/settings" className={`nav-link ${isActive("/settings") ? "active" : ""}`}>
+                  Settings
+                </Link>
               </div>
               <button
                 onClick={() => {
                   logout();
                   setUser(null);
                   nav("/login");
-                  try { window.dispatchEvent(new CustomEvent("sp:changed")); } catch {}
+                  try {
+                    window.dispatchEvent(new CustomEvent("sp:changed"));
+                  } catch {}
                 }}
                 className="w-full px-3 py-2 mt-3 text-sm text-white bg-red-500 rounded-md hover:bg-red-600"
               >

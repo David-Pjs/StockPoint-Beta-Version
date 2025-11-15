@@ -90,7 +90,7 @@ async function inlineImages(node: HTMLElement) {
         });
         img.setAttribute("src", dataUrl);
         img.setAttribute("crossorigin", "anonymous");
-      } catch { /* ignore */ }
+      } catch { /* ignore errors for remote images */ }
     })
   );
 }
@@ -148,6 +148,129 @@ async function capturePng(el: HTMLElement, opts?: { scale?: number }): Promise<s
   }
 }
 
+/* ------------- Render a minimal receipt HTML for consistent captures ------------- */
+/* This returns an HTML string we will wrap into SVG -> PNG for crisp multi-capture */
+function renderReceiptHtml(company: ReturnType<typeof getCompany>, tx: Tx, opts?: { width?: number }) {
+  const w = opts?.width || 820;
+  const q = safeQty(tx.qty);
+  const u = safeUnit(q, tx.unit_price, tx.amount);
+  const total = Number(tx.amount) || q * u || 0;
+  const companyName = company.name || "Your Company";
+
+  // inline basic styles to ensure consistent captures
+  const styles = `
+    <style>
+      :root{ --ink:#0f1724; --muted:#64748b; --accent:#4f46e5; }
+      body{ margin:0; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; color:var(--ink); background:#fff; -webkit-font-smoothing:antialiased; }
+      .wrap{ width:${w}px; padding:28px; box-sizing:border-box; }
+      .ribbon{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px; }
+      .brand{ font-weight:800; font-size:22px; letter-spacing: -0.01em; }
+      .meta{ font-size:12px; color:var(--muted); }
+      .card{ border:1px solid #e6eef6; border-radius:8px; padding:12px; margin-bottom:18px; background:#fff; }
+      table{ width:100%; border-collapse:collapse; font-size:13px; }
+      thead th{ text-align:left; font-weight:700; padding:12px; background:#f5f7fb; border-bottom:1px solid #e6eef6; color:var(--muted); }
+      tbody td{ padding:12px; border-bottom:1px solid #f0f3f7; }
+      tfoot td{ padding:12px; font-weight:800; }
+      .right{ text-align:right; font-variant-numeric: tabular-nums; }
+      .total{ background:linear-gradient(90deg,var(--accent), color-mix(in srgb,var(--accent),white 24%)); color:#fff; padding:8px 12px; border-radius:6px; display:inline-block; font-weight:900; }
+      .footnote{ margin-top:18px; font-size:12px; color:var(--muted); }
+      img.logo{ max-height:48px; object-fit:contain; border-radius:6px; }
+    </style>
+  `;
+
+  const logo = company.logo ? `<img class="logo" src="${company.logo}" alt="logo" />` : "";
+
+  const html = `
+    <!doctype html><html><head><meta charset="utf-8">${styles}</head>
+    <body>
+      <div class="wrap">
+        <div class="ribbon">
+          <div>
+            <div class="brand">${companyName}</div>
+            <div class="meta">${company.address || ""}${company.address && (company.email || company.phone) ? " · " : ""}${company.email || ""}${company.email && company.phone ? " · " : ""}${company.phone || ""}</div>
+          </div>
+          <div>${logo}</div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;gap:12px;justify-content:space-between;align-items:flex-start;">
+            <div>
+              <div style="font-size:12px;color:var(--muted)">Date</div>
+              <div style="font-weight:800">${tx.occurred_on || "-"}</div>
+              <div style="margin-top:8px;font-size:12px;color:var(--muted)">Customer</div>
+              <div style="font-weight:800">${tx.customer_name || "-"}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:12px;color:var(--muted)">Ref</div>
+              <div style="font-weight:800">${tx.reference || tx.id}</div>
+              <div style="height:10px"></div>
+              <div style="font-size:12px;color:var(--muted)">Method</div>
+              <div style="font-weight:800">${tx.method || "-"}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <table>
+            <thead>
+              <tr><th>Description</th><th class="right">Qty</th><th class="right">Unit</th><th class="right">Total</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${tx.description || "-"}</td>
+                <td class="right">${q}</td>
+                <td class="right">${money(u)}</td>
+                <td class="right">${money(total)}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr><td colspan="3" class="right">Total</td><td class="right">${money(total)}</td></tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div class="footnote">Thank you for your business. ${companyName} · ${company.email || ""} ${company.phone ? "· " + company.phone : ""}</div>
+      </div>
+    </body>
+    </html>
+  `;
+  return html;
+}
+
+/* ---------- Convert raw HTML string into PNG data URL (using svg+foreignObject) ---------- */
+async function captureHtmlToPng(html: string, width = 820, height = 1120, scale = 2): Promise<string> {
+  // wrap html into foreignObject; we must ensure the height is enough for the content:
+  // If you want a dynamic height, you can measure by rendering off-DOM then measuring, but for simplicity we use a tall canvas.
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${width * scale}' height='${height * scale}'>
+    <foreignObject x='0' y='0' width='${width * scale}' height='${height * scale}'>
+      ${new XMLSerializer().serializeToString(new DOMParser().parseFromString(html, 'text/html').documentElement)}
+    </foreignObject>
+  </svg>`;
+  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    // Height may be large; keep the height parameter flexible. Try a standard A4 ratio if not given.
+    canvas.width = Math.floor(width * scale);
+    canvas.height = Math.floor(height * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas not supported");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
+    return canvas.toDataURL("image/png");
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/* helper to download DataURL */
 function downloadDataUrl(dataUrl: string, name: string) {
   const a = document.createElement("a");
   a.href = dataUrl;
@@ -155,27 +278,21 @@ function downloadDataUrl(dataUrl: string, name: string) {
   a.click();
 }
 
-function openPrintWindowForPng(png: string, fileBase: string) {
-  const html = `
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>${fileBase}</title>
-  <style>
-    @page { size: A4; margin: 14mm; }
-    html, body { background: #fff; }
-    .wrap { width: 100%; display: flex; justify-content: center; }
-    img { width: 182mm; height: auto; }
-  </style>
-</head>
-<body>
-  <div class="wrap"><img src="${png}" /></div>
-  <script>
-    window.onload = () => { window.print(); setTimeout(()=>window.close(), 300); };
-  </script>
-</body>
-</html>`;
+/* Open multi-image print window (each image on its own A4 page) */
+function openPrintWindowForPngs(pngs: string[], fileBase: string) {
+  const imgsHtml = pngs
+    .map(
+      (p, i) => `<div class="page"><img src="${p}" alt="${fileBase}-${i}" /></div>`
+    )
+    .join("\n");
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${fileBase}</title>
+    <style>
+      @page { size: A4; margin: 14mm; }
+      html,body{ background:#fff; margin:0; padding:0; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      .page{ page-break-after: always; display:flex; align-items:center; justify-content:center; height:100vh; box-sizing:border-box; padding:14mm; }
+      img{ max-width:100%; max-height:100%; object-fit:contain; display:block; }
+    </style>
+  </head><body>${imgsHtml}<script>window.onload = ()=>{ setTimeout(()=>{ window.print(); setTimeout(()=>window.close(),500); }, 200); };</script></body></html>`;
   const w = window.open("", "_blank", "noopener,noreferrer");
   if (!w) return;
   w.document.open();
@@ -184,11 +301,7 @@ function openPrintWindowForPng(png: string, fileBase: string) {
 }
 
 /* ---------------------- Share as plain text ---------------------- */
-function buildShareText(
-  rows: Tx[],
-  company: ReturnType<typeof getCompany>,
-  grandTotal: number
-) {
+function buildShareText(rows: Tx[], company: ReturnType<typeof getCompany>, grandTotal: number) {
   const lines: string[] = [];
   lines.push(`${company.name || "Receipt"}`);
   const meta = [company.address, company.email, company.phone].filter(Boolean).join(" • ");
@@ -196,19 +309,19 @@ function buildShareText(
   lines.push("");
 
   const uniq = (vals: (string | null)[]) => {
-    const u = Array.from(new Set(vals.map(v => v || "—")));
+    const u = Array.from(new Set(vals.map((v) => v || "—")));
     return u.length === 1 ? u[0] : "Multiple";
   };
 
-  lines.push(`Date: ${uniq(rows.map(r => r.occurred_on))}`);
-  lines.push(`Ref: ${uniq(rows.map(r => r.reference || r.id))}`);
-  lines.push(`Customer: ${uniq(rows.map(r => r.customer_name))}`);
-  lines.push(`Method: ${uniq(rows.map(r => r.method))}`);
+  lines.push(`Date: ${uniq(rows.map((r) => r.occurred_on))}`);
+  lines.push(`Ref: ${uniq(rows.map((r) => r.reference || r.id))}`);
+  lines.push(`Customer: ${uniq(rows.map((r) => r.customer_name))}`);
+  lines.push(`Method: ${uniq(rows.map((r) => r.method))}`);
   lines.push("");
 
   lines.push(`Items:`);
   lines.push(`Description | Qty | Unit | Total`);
-  rows.forEach(r => {
+  rows.forEach((r) => {
     const q = safeQty(r.qty);
     const u = safeUnit(q, r.unit_price, r.amount);
     const rowTotal = Number(r.amount) || q * u || 0;
@@ -263,6 +376,7 @@ export default function ReceiptModal({
   const [count, setCount] = useState<number>(0);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (open) setCount(readEReceipts().length);
@@ -272,21 +386,101 @@ export default function ReceiptModal({
   async function onSavePng() {
     const node = containerRef.current;
     if (!node) return;
-    const dataUrl = await capturePng(node, { scale: 2 });
-    downloadDataUrl(
-      dataUrl,
-      `receipt-${isMulti ? "multi" : single?.reference || single?.id || "receipt"}.png`
-    );
+    setBusy(true);
+    try {
+      const dataUrl = await capturePng(node, { scale: 2 });
+      downloadDataUrl(
+        dataUrl,
+        `receipt-${isMulti ? "multi" : single?.reference || single?.id || "receipt"}.png`
+      );
+    } catch (e: any) {
+      setMsg(e?.message || "Failed to save PNG.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function onPrintPdf() {
     const node = containerRef.current;
     if (!node) return;
-    const dataUrl = await capturePng(node, { scale: 2 }); // crisp print
-    openPrintWindowForPng(
-      dataUrl,
-      `receipt-${isMulti ? "multi" : single?.reference || single?.id || "receipt"}`
-    );
+    setBusy(true);
+    try {
+      // if single or multi already rendered in container, capture container as single page
+      const dataUrl = await capturePng(node, { scale: 2 });
+      openPrintWindowForPngs([dataUrl], `receipt-${isMulti ? "multi" : single?.reference || single?.id || "receipt"}`);
+    } catch (e: any) {
+      setMsg(e?.message || "Failed to generate PDF.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /* ------------------ NEW: Multi-print/export using generated HTML per Tx ------------------ */
+  async function onPrintPdfMulti() {
+    if (!rows || rows.length === 0) return;
+    setBusy(true);
+    try {
+      const pngs: string[] = [];
+      // choose an approximate height for each generated receipt (A4 portrait ~ 1120px @ 72dpi)
+      for (const r of rows) {
+        // render the html and capture PNG.
+        const html = renderReceiptHtml(company, r, { width: 820 });
+        // height 1120 should be enough for a single receipt page; if your receipts are longer, increase height.
+        const png = await captureHtmlToPng(html, 820, 1120, 2);
+        pngs.push(png);
+      }
+      openPrintWindowForPngs(pngs, `receipts-${rows.length}`);
+    } catch (e: any) {
+      setMsg(e?.message || "Failed to export receipts.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /* ------------------ NEW: Share images (Web Share API with files) ------------------ */
+  async function onShareImages() {
+    try {
+      setBusy(true);
+      const pngs: string[] = [];
+      for (const r of rows) {
+        const html = renderReceiptHtml(company, r, { width: 820 });
+        const png = await captureHtmlToPng(html, 820, 1120, 2);
+        pngs.push(png);
+      }
+
+      // Convert dataURLs to Blobs / Files
+      const files: File[] = [];
+      for (let i = 0; i < pngs.length; i++) {
+        const dataUrl = pngs[i];
+        const res = await (await fetch(dataUrl)).blob();
+        const file = new File([res], `receipt-${i + 1}.png`, { type: "image/png" });
+        files.push(file);
+      }
+
+      // If navigator.canShare files, share them (works on many mobile browsers)
+      // navigator.canShare may not be present in all browsers.
+      const nav: any = navigator;
+      if (nav && nav.canShare && nav.canShare({ files })) {
+        await nav.share({ files, title: company.name || "Receipts", text: `${company.name || ""} receipts` });
+        return;
+      }
+
+      // Fallback: if single receipt, try navigator.share({files}) where supported
+      if (nav && nav.share && files.length === 1) {
+        await nav.share({ files, title: company.name || "Receipt", text: "Receipt" });
+        return;
+      }
+
+      // Final fallback: save first PNG locally and open WhatsApp web with text
+      // (WhatsApp web doesn't accept image data in the share URL — user will have to attach file manually)
+      const firstText = buildShareText(rows, company, grandTotal);
+      const encoded = encodeURIComponent(firstText + "\n\n(Attach the exported image from your downloads)");
+      window.open(`https://wa.me/?text=${encoded}`, "_blank", "noopener");
+    } catch (e: any) {
+      setMsg(e?.message || "Failed to share images.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function onShare() {
@@ -370,7 +564,7 @@ export default function ReceiptModal({
           className="relative p-5 sm:p-7"
           style={{
             background:
-              "linear-gradient(135deg, rgba(2,132,199,0.08), rgba(16,185,129,0.08))",
+              "linear-gradient(135deg, rgba(2,132,199,0.06), rgba(16,185,129,0.06))",
           }}
         >
           <div className="flex items-start justify-between gap-4">
@@ -436,8 +630,8 @@ export default function ReceiptModal({
                     <tr key={r.id} className={i % 2 ? "bg-neutral-50/40" : ""}>
                       <td className="px-3 py-2">{r.description || "—"}</td>
                       <td className="px-3 py-2 text-right">{q}</td>
-                      <td className="px-3 py-2 text-right">{money(u)}</td>
-                      <td className="px-3 py-2 font-medium text-right">{money(rowTotal)}</td>
+                      <td className="px-3 py-2 text-right" style={{ fontVariantNumeric: "tabular-nums" }}>{money(u)}</td>
+                      <td className="px-3 py-2 font-medium text-right" style={{ fontVariantNumeric: "tabular-nums" }}>{money(rowTotal)}</td>
                     </tr>
                   );
                 })}
@@ -491,6 +685,7 @@ export default function ReceiptModal({
           type="button"
           className="px-3 py-2 border rounded-lg border-neutral-300 hover:bg-neutral-100"
           onClick={onSavePng}
+          disabled={busy}
         >
           Save as PNG
         </button>
@@ -499,6 +694,7 @@ export default function ReceiptModal({
           type="button"
           className="px-3 py-2 border rounded-lg border-neutral-300 hover:bg-neutral-100"
           onClick={onShare}
+          disabled={busy}
         >
           Share
         </button>
@@ -513,13 +709,36 @@ export default function ReceiptModal({
 
         <button
           type="button"
-          className="px-3 py-2 ml-auto border rounded-lg border-neutral-300 hover:bg-neutral-100"
+          className="px-3 py-2 border rounded-lg border-neutral-300 hover:bg-neutral-100"
           onClick={onPrintPdf}
         >
           Print / Save as PDF
         </button>
 
-        <span className="text-[12px] text-neutral-500">
+        {/* New multi-export/share buttons */}
+        {rows.length > 1 && (
+          <>
+            <button
+              type="button"
+              className="px-3 py-2 border rounded-lg border-neutral-300 hover:bg-neutral-100"
+              onClick={onPrintPdfMulti}
+              disabled={busy}
+            >
+              Export all as PDF
+            </button>
+
+            <button
+              type="button"
+              className="px-3 py-2 border rounded-lg border-neutral-300 hover:bg-neutral-100"
+              onClick={onShareImages}
+              disabled={busy}
+            >
+              Share images (WhatsApp / share)
+            </button>
+          </>
+        )}
+
+        <span className="text-[12px] text-neutral-500 ml-auto">
           {limit === Infinity ? `Saved: ${count} · Unlimited` : `Saved: ${count}/${limit}`}
         </span>
         {msg && <span className="text-[12px] text-neutral-600">{msg}</span>}
